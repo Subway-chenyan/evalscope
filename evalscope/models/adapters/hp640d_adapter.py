@@ -1,21 +1,28 @@
+# Copyright (c) Alibaba, Inc. and its affiliates.
 from typing import Any, Dict, List, Union
 
-from ..custom import CustomModel
+from ..custom import HP640DModel
 from .base_adapter import BaseModelAdapter
 
 
-class CustomModelAdapter(BaseModelAdapter):
-
-    def __init__(self, custom_model: CustomModel, **kwargs):
+class HP640DAdapter(BaseModelAdapter):
+    """
+    HP640D Custom Model Adapter for EvalScope
+    
+    This adapter integrates LynLLM HP640D inference framework with EvalScope evaluation framework.
+    It supports all HP640D parameters and provides OpenAI-compatible output format.
+    """
+    
+    def __init__(self, hp640d_model: HP640DModel, **kwargs):
         """
-        Custom model adapter.
-
+        Initialize HP640D model adapter.
+        
         Args:
-            custom_model: The custom model instance.
+            hp640d_model: The HP640D model instance.
             **kwargs: Other args.
         """
-        self.custom_model = custom_model
-        super(CustomModelAdapter, self).__init__(model=custom_model)
+        self.hp640d_model = hp640d_model
+        super(HP640DAdapter, self).__init__(model=hp640d_model)
 
     def predict(self, inputs: List[Union[str, dict, list]], **kwargs) -> List[Dict[str, Any]]:
         """
@@ -41,7 +48,7 @@ class CustomModelAdapter(BaseModelAdapter):
                 }
               ],
               'created': 1677664795,
-              'model': 'gpt-3.5-turbo-0613',   # should be model_id
+              'model': 'hp640d-model',   # should be model_id
               'object': 'chat.completion',
               'usage': {
                 'completion_tokens': 17,
@@ -64,4 +71,4 @@ class CustomModelAdapter(BaseModelAdapter):
             else:
                 raise TypeError(f'Unsupported inputs type: {type(input_prompt)}')
 
-        return self.custom_model.predict(prompts=in_prompts, origin_inputs=inputs, **kwargs)
+        return self.hp640d_model.predict(prompts=in_prompts, origin_inputs=inputs, **kwargs) 

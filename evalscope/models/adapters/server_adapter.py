@@ -5,15 +5,13 @@ from openai.types.chat import ChatCompletion, ChatCompletionChunk
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 from typing import List, Optional, Union
 
-from evalscope.utils.argument_utils import get_supported_params
 from evalscope.utils.logger import get_logger
-from ..register import register_model_adapter
+from evalscope.utils.utils import get_supported_params
 from .base_adapter import BaseModelAdapter
 
 logger = get_logger()
 
 
-@register_model_adapter(name='server')
 class ServerModelAdapter(BaseModelAdapter):
     """
     Server model adapter to request remote API model and generate results.

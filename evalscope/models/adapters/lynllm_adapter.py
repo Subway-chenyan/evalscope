@@ -1,21 +1,28 @@
+# Copyright (c) Alibaba, Inc. and its affiliates.
 from typing import Any, Dict, List, Union
 
-from ..custom import CustomModel
+from ..custom import LynLLMModel
 from .base_adapter import BaseModelAdapter
 
 
-class CustomModelAdapter(BaseModelAdapter):
-
-    def __init__(self, custom_model: CustomModel, **kwargs):
+class LynLLMAdapter(BaseModelAdapter):
+    """
+    LynLLM Custom Model Adapter for EvalScope
+    
+    This adapter integrates LynLLM inference framework with EvalScope evaluation framework.
+    It supports all LynLLM parameters and provides OpenAI-compatible output format.
+    """
+    
+    def __init__(self, lynllm_model: LynLLMModel, **kwargs):
         """
-        Custom model adapter.
-
+        Initialize LynLLM model adapter.
+        
         Args:
-            custom_model: The custom model instance.
+            lynllm_model: The LynLLM model instance.
             **kwargs: Other args.
         """
-        self.custom_model = custom_model
-        super(CustomModelAdapter, self).__init__(model=custom_model)
+        self.lynllm_model = lynllm_model
+        super(LynLLMAdapter, self).__init__(model=lynllm_model)
 
     def predict(self, inputs: List[Union[str, dict, list]], **kwargs) -> List[Dict[str, Any]]:
         """
@@ -64,4 +71,4 @@ class CustomModelAdapter(BaseModelAdapter):
             else:
                 raise TypeError(f'Unsupported inputs type: {type(input_prompt)}')
 
-        return self.custom_model.predict(prompts=in_prompts, origin_inputs=inputs, **kwargs)
+        return self.lynllm_model.predict(prompts=in_prompts, origin_inputs=inputs, **kwargs)
