@@ -11,6 +11,7 @@ try:
     from LynLLM.hp640d import logger
     from LynLLM.hp640d.api import (init_llm_model, run_llm_model)
     from LynLLM.serving.openai_entry.sampling_params import SamplingParams
+    from LynLLM.hp640d.core.multibatch_model import MultiBatchModel
     HP640D_AVAILABLE = True
 except ImportError:
     HP640D_AVAILABLE = False
@@ -18,6 +19,7 @@ except ImportError:
     init_llm_model = None
     run_llm_model = None
     SamplingParams = None
+    MultiBatchModel = None
 
 logger = logging.getLogger(__name__)
 
@@ -86,8 +88,6 @@ class HP640DModel(CustomModel):
         
         # Initialize model
         self.model = None
-        self.tokenizer = None
-        self.generation_config = None
         self._init_model()
         
         logger.info(f"HP640D model initialized with path: {self.model_path}")
@@ -108,24 +108,22 @@ class HP640DModel(CustomModel):
             # Initialize model using HP640D API with distributed configuration
             if ip_list:
                 # Distributed mode with IP list
-                init_kwargs = {
-                    'model_path': self.model_path,
-                    'ip_list': ip_list,
-                    'ray_cluster_head_ip': self.ray_cluster_head_ip,
-                    'ray_cluster_head_port': self.ray_cluster_head_port,
-                    'node_config_json_path': self.distributed_configs_path,
+                self.model = init_llm_model(
+                    self.model_path,
+                    ip_list=ip_list,
+                    ray_cluster_head_ip=self.ray_cluster_head_ip,
+                    ray_cluster_head_port=self.ray_cluster_head_port,
+                    node_config_json_path=self.distributed_configs_path,
                     **self.hp640d_kwargs
-                }
+                )
             else:
                 # Single node or master mode
-                init_kwargs = {
-                    'model_path': self.model_path,
-                    'is_master': self.master,
-                    'node_config_json_path': self.node_config,
+                self.model = init_llm_model(
+                    self.model_path, 
+                    is_master=self.master, 
+                    node_config_json_path=self.node_config,
                     **self.hp640d_kwargs
-                }
-            
-            self.model, self.tokenizer, self.generation_config = init_llm_model(**init_kwargs)
+                )
             
             # Log load time
             load_time = time.time() - load_start
@@ -253,7 +251,7 @@ class HP640DModel(CustomModel):
                 
                 sample_param = SamplingParams(max_tokens=max_length)
                 
-                generation_config = copy.deepcopy(self.generation_config)
+                generation_config = copy.deepcopy(self.model.generation_config)
                 generation_config.do_sample = self.do_sample
                 
                 # Build input tokens
@@ -313,7 +311,7 @@ class HP640DModel(CustomModel):
                     result = []
                 
                 # Decode response
-                response_text = self.tokenizer.batch_decode([result], skip_special_tokens=True)[0]
+                response_text = self.model.tokenizer.batch_decode([result], skip_special_tokens=True)[0]
                 inference_time = time.time() - start_time
                 
                 logger.debug(f"Response {i+1}: {response_text[:100]}...")
@@ -376,7 +374,8 @@ class HP640DModel(CustomModel):
         """Cleanup model resources."""
         if hasattr(self, 'model') and self.model is not None:
             try:
-                # Cleanup model resources if needed
+                # Stop the model
+                self.model.stop()
                 logger.info("HP640D model terminated successfully")
             except Exception as e:
                 logger.warning(f"Error during model cleanup: {str(e)}")
