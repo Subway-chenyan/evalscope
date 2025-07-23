@@ -38,10 +38,15 @@ class HP640DModel(CustomModel):
             config (dict): Configuration dict containing model parameters
                 Required keys:
                 - model_path: Path to the HP640D model
-                - device_list: Device list for inference (str or list)
                 Optional keys:
                 - do_sample: Whether to use sampling (default: True)
                 - max_tokens: Maximum tokens to generate (default: None)
+                - ip_file: Path to file containing IP list for distributed mode
+                - ray_cluster_head_ip: Master node IP for distributed mode
+                - ray_cluster_head_port: Master node port for distributed mode
+                - master: Whether this is a master node (default: False)
+                - distributed_configs_path: Path to distributed configuration JSON
+                - node_config: Path to node configuration JSON
                 - Other HP640D parameters
             **kwargs: Additional keyword arguments
         """
@@ -62,13 +67,22 @@ class HP640DModel(CustomModel):
         if not self.model_path:
             raise ValueError("model_path is required in config")
         
-        self.device_list = config.get('device_list', "0")
         self.do_sample = config.get('do_sample', True)
         self.max_tokens = config.get('max_tokens', None)
         
-        # Extract other HP640D parameters
-        self.hp640d_kwargs = {k: v for k, v in config.items() 
-                              if k not in ['model_path', 'device_list', 'do_sample', 'max_tokens', 'model_id']}
+        # Extract distributed configuration parameters
+        self.ip_file = config.get('ip_file', None)
+        self.ray_cluster_head_ip = config.get('ray_cluster_head_ip', None)
+        self.ray_cluster_head_port = config.get('ray_cluster_head_port', None)
+        self.master = config.get('master', False)
+        self.distributed_configs_path = config.get('distributed_configs_path', None)
+        self.node_config = config.get('node_config', None)
+        
+        # Extract other HP640D parameters (excluding distributed config params)
+        excluded_keys = ['model_path', 'do_sample', 'max_tokens', 'model_id', 
+                        'ip_file', 'ray_cluster_head_ip', 'ray_cluster_head_port', 'master', 
+                        'distributed_configs_path', 'node_config']
+        self.hp640d_kwargs = {k: v for k, v in config.items() if k not in excluded_keys}
         
         # Initialize model
         self.model = None
@@ -77,20 +91,45 @@ class HP640DModel(CustomModel):
         self._init_model()
         
         logger.info(f"HP640D model initialized with path: {self.model_path}")
-        logger.info(f"Device list: {self.device_list}")
         
     def _init_model(self):
         """Initialize the HP640D model instance."""
         try:
-            # Initialize model using HP640D API
-            init_kwargs = {
-                'model_path': self.model_path,
-                'device_list': self.device_list,
-                **self.hp640d_kwargs
-            }
+            # Read IP list from file if specified
+            ip_list = None
+            if self.ip_file is not None:
+                with open(self.ip_file, "r") as f:
+                    ip_list = [ip.strip() for ip in f.readlines()]
+                    logger.info(f"Loaded IP list from file: {ip_list}")
+            
+            # Record load start time
+            load_start = time.time()
+            
+            # Initialize model using HP640D API with distributed configuration
+            if ip_list:
+                # Distributed mode with IP list
+                init_kwargs = {
+                    'model_path': self.model_path,
+                    'ip_list': ip_list,
+                    'ray_cluster_head_ip': self.ray_cluster_head_ip,
+                    'ray_cluster_head_port': self.ray_cluster_head_port,
+                    'node_config_json_path': self.distributed_configs_path,
+                    **self.hp640d_kwargs
+                }
+            else:
+                # Single node or master mode
+                init_kwargs = {
+                    'model_path': self.model_path,
+                    'is_master': self.master,
+                    'node_config_json_path': self.node_config,
+                    **self.hp640d_kwargs
+                }
             
             self.model, self.tokenizer, self.generation_config = init_llm_model(**init_kwargs)
-            logger.info("HP640D model loaded successfully")
+            
+            # Log load time
+            load_time = time.time() - load_start
+            logger.info(f"HP640D model loaded successfully in {load_time:.2f} seconds")
         except Exception as e:
             logger.error(f"Failed to initialize HP640D model: {str(e)}")
             raise
